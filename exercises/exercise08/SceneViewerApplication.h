@@ -48,4 +48,7 @@ private:
 
     // Default material
     std::shared_ptr<Material> m_defaultMaterial;
+
+    // My invis material
+    std::shared_ptr<Material> m_invisMaterial;
 };

@@ -15,6 +15,7 @@
 #include <ituGL/shader/Material.h>
 #include <ituGL/geometry/Model.h>
 #include <ituGL/scene/SceneModel.h>
+#include <ituGL/scene/Transform.h>
 
 #include <ituGL/renderer/SkyboxRenderPass.h>
 #include <ituGL/renderer/ForwardRenderPass.h>
@@ -22,6 +23,10 @@
 
 #include <ituGL/scene/ImGuiSceneVisitor.h>
 #include <imgui.h>
+#include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp> 
+
+
 
 SceneViewerApplication::SceneViewerApplication()
     : Application(1024, 1024, "Scene Viewer demo")
@@ -41,6 +46,7 @@ void SceneViewerApplication::Initialize()
     InitializeMaterial();
     InitializeModels();
     InitializeRenderer();
+
 }
 
 void SceneViewerApplication::Update()
@@ -60,7 +66,6 @@ void SceneViewerApplication::Render()
     Application::Render();
 
     GetDevice().Clear(true, Color(0.0f, 0.0f, 0.0f, 1.0f), true, 1.0f);
-
     // Render the scene
     m_renderer.Render();
 
@@ -146,6 +151,36 @@ void SceneViewerApplication::InitializeMaterial()
         m_renderer.GetDefaultUpdateLightsFunction(*shaderProgramPtr)
     );
 
+
+    // My invis shader
+    std::vector<const char*> invisFragmentShaderPaths;
+    invisFragmentShaderPaths.push_back("shaders/version330.glsl");
+    invisFragmentShaderPaths.push_back("shaders/utils.glsl");
+    invisFragmentShaderPaths.push_back("shaders/lambert-ggx.glsl");
+    invisFragmentShaderPaths.push_back("shaders/lighting.glsl");
+    invisFragmentShaderPaths.push_back("shaders/invis.frag");
+    Shader invisShader = ShaderLoader(Shader::FragmentShader).Load(invisFragmentShaderPaths);
+
+    std::shared_ptr<ShaderProgram> invisShaderProgramPtr = std::make_shared<ShaderProgram>();
+    invisShaderProgramPtr->Build(vertexShader, invisShader);
+
+    ShaderProgram::Location invisCameraPositionLocation = invisShaderProgramPtr->GetUniformLocation("CameraPosition");
+    ShaderProgram::Location invisWorldMatrixLocation = invisShaderProgramPtr->GetUniformLocation("WorldMatrix");
+    ShaderProgram::Location invisViewProjMatrixLocation = invisShaderProgramPtr->GetUniformLocation("ViewProjMatrix");
+
+    m_renderer.RegisterShaderProgram(invisShaderProgramPtr,
+        [=](const ShaderProgram& shaderProgram, const glm::mat4& worldMatrix, const Camera& camera, bool cameraChanged)
+        {
+            if (cameraChanged)
+            {
+                shaderProgram.SetUniform(invisCameraPositionLocation, camera.ExtractTranslation());
+                shaderProgram.SetUniform(invisViewProjMatrixLocation, camera.GetViewProjectionMatrix());
+            }
+            shaderProgram.SetUniform(invisWorldMatrixLocation, worldMatrix);
+        },
+        m_renderer.GetDefaultUpdateLightsFunction(*invisShaderProgramPtr)
+    );
+
     // Filter out uniforms that are not material properties
     ShaderUniformCollection::NameSet filteredUniforms;
     filteredUniforms.insert("CameraPosition");
@@ -160,6 +195,10 @@ void SceneViewerApplication::InitializeMaterial()
     // Create reference material
     assert(shaderProgramPtr);
     m_defaultMaterial = std::make_shared<Material>(shaderProgramPtr, filteredUniforms);
+
+    assert(invisShaderProgramPtr);
+    m_invisMaterial = std::make_shared<Material>(invisShaderProgramPtr, filteredUniforms);
+
 }
 
 void SceneViewerApplication::InitializeModels()
@@ -199,22 +238,48 @@ void SceneViewerApplication::InitializeModels()
     loader.SetMaterialProperty(ModelLoader::MaterialProperty::NormalTexture, "NormalTexture");
     loader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
 
+    // Configure loader
+    ModelLoader invisLoader(m_invisMaterial);
+
+    // Create a new material copy for each submaterial
+    invisLoader.SetCreateMaterials(true);
+
+    // Flip vertically textures loaded by the model loader
+    invisLoader.GetTexture2DLoader().SetFlipVertical(true);
+
+    // Link vertex properties to attributes
+    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Position, "VertexPosition");
+    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Normal, "VertexNormal");
+    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Tangent, "VertexTangent");
+    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Bitangent, "VertexBitangent");
+    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::TexCoord0, "VertexTexCoord");
+
+    // Link material properties to uniforms
+    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseColor, "Color");
+    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseTexture, "ColorTexture");
+    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::NormalTexture, "NormalTexture");
+    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
+
     // Load models
-    std::shared_ptr<Model> chestModel = loader.LoadShared("models/treasure_chest/treasure_chest.obj");
+    std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
     m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure chest", chestModel));
 
-    //std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
-    //m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
+    std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
+    m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
 
-    //std::shared_ptr<Model> teaSetModel = loader.LoadShared("models/tea_set/tea_set.obj");
-    //m_scene.AddSceneNode(std::make_shared<SceneModel>("tea set", teaSetModel));
+    std::shared_ptr<Model> teaSetModel = loader.LoadShared("models/tea_set/tea_set.obj");
+    m_scene.AddSceneNode(std::make_shared<SceneModel>("tea set", teaSetModel));
 
-    //std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
-    //m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
+    std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
+    m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 }
 
 void SceneViewerApplication::InitializeRenderer()
 {
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
     m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
 }
