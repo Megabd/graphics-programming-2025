@@ -25,6 +25,7 @@
 #include <imgui.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp> 
+#include <iostream>
 
 
 
@@ -37,6 +38,8 @@ SceneViewerApplication::SceneViewerApplication()
 void SceneViewerApplication::Initialize()
 {
     Application::Initialize();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Initialize DearImGUI
     m_imGui.Initialize(GetMainWindow());
@@ -65,7 +68,7 @@ void SceneViewerApplication::Render()
 {
     Application::Render();
 
-    GetDevice().Clear(true, Color(0.0f, 0.0f, 0.0f, 1.0f), true, 1.0f);
+    GetDevice().Clear(true, Color(0.5f, 0.5f, 0.5f, 1.0f), true, 1.0f);
     // Render the scene
     m_renderer.Render();
 
@@ -157,7 +160,13 @@ void SceneViewerApplication::InitializeMaterial()
 
     //assert(invisShaderProgramPtr);
     m_invisMaterial = InitMaterial(invisShader, vertexShader, filteredUniforms);
-
+    m_invisMaterial->SetBlendEquation(Material::BlendEquation::Add);
+    m_invisMaterial->SetBlendParams(
+        Material::BlendParam::SourceAlpha,
+        Material::BlendParam::OneMinusSourceAlpha
+    );
+    m_invisMaterial->SetDepthWrite(false);
+    m_invisMaterial->SetDepthTestFunction(Material::TestFunction::LessEqual);
 }
 
 void SceneViewerApplication::InitializeModels()
@@ -179,28 +188,25 @@ void SceneViewerApplication::InitializeModels()
 
     // Load models
 
+    //std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
+    //m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
+
+    //std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
+    //m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
+
+
     std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
     m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure chest", chestModel));
 
-    std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
+    //std::shared_ptr<Model> teaSetModel = loader.LoadShared("models/tea_set/tea_set.obj");
+    //m_scene.AddSceneNode(std::make_shared<SceneModel>("tea set", teaSetModel));
 
-    std::shared_ptr<Model> teaSetModel = loader.LoadShared("models/tea_set/tea_set.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("tea set", teaSetModel));
-
-    std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 }
 
 void SceneViewerApplication::InitializeRenderer()
 {
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
+    //m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
     m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
-    m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
 }
 
 void SceneViewerApplication::RenderGUI()

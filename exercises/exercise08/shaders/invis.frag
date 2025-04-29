@@ -29,5 +29,5 @@ void main()
 	vec3 position = WorldPosition;
 	vec3 viewDir = GetDirection(position, CameraPosition);
 	vec3 color = ComputeLighting(position, data, viewDir, true);
-	FragColor = vec4(color.rgb, 0.3);
+	FragColor = vec4(1.0, 0.0, 0.0, 0.5);
 }
