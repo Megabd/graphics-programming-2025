@@ -1,4 +1,4 @@
-#include "SceneViewerApplication.h"
+﻿#include "SceneViewerApplication.h"
 
 #include <ituGL/asset/TextureCubemapLoader.h>
 #include <ituGL/asset/ShaderLoader.h>
@@ -121,6 +121,7 @@ void SceneViewerApplication::InitializeMaterial()
     vertexShaderPaths.push_back("shaders/default.vert");
     Shader vertexShader = ShaderLoader(Shader::VertexShader).Load(vertexShaderPaths);
 
+    // Default Shader
     std::vector<const char*> fragmentShaderPaths;
     fragmentShaderPaths.push_back("shaders/version330.glsl");
     fragmentShaderPaths.push_back("shaders/utils.glsl");
@@ -128,29 +129,6 @@ void SceneViewerApplication::InitializeMaterial()
     fragmentShaderPaths.push_back("shaders/lighting.glsl");
     fragmentShaderPaths.push_back("shaders/default_pbr.frag");
     Shader fragmentShader = ShaderLoader(Shader::FragmentShader).Load(fragmentShaderPaths);
-
-    std::shared_ptr<ShaderProgram> shaderProgramPtr = std::make_shared<ShaderProgram>();
-    shaderProgramPtr->Build(vertexShader, fragmentShader);
-
-    // Get transform related uniform locations
-    ShaderProgram::Location cameraPositionLocation = shaderProgramPtr->GetUniformLocation("CameraPosition");
-    ShaderProgram::Location worldMatrixLocation = shaderProgramPtr->GetUniformLocation("WorldMatrix");
-    ShaderProgram::Location viewProjMatrixLocation = shaderProgramPtr->GetUniformLocation("ViewProjMatrix");
-
-    // Register shader with renderer
-    m_renderer.RegisterShaderProgram(shaderProgramPtr,
-        [=](const ShaderProgram& shaderProgram, const glm::mat4& worldMatrix, const Camera& camera, bool cameraChanged)
-        {
-            if (cameraChanged)
-            {
-                shaderProgram.SetUniform(cameraPositionLocation, camera.ExtractTranslation());
-                shaderProgram.SetUniform(viewProjMatrixLocation, camera.GetViewProjectionMatrix());
-            }
-            shaderProgram.SetUniform(worldMatrixLocation, worldMatrix);
-        },
-        m_renderer.GetDefaultUpdateLightsFunction(*shaderProgramPtr)
-    );
-
 
     // My invis shader
     std::vector<const char*> invisFragmentShaderPaths;
@@ -160,26 +138,6 @@ void SceneViewerApplication::InitializeMaterial()
     invisFragmentShaderPaths.push_back("shaders/lighting.glsl");
     invisFragmentShaderPaths.push_back("shaders/invis.frag");
     Shader invisShader = ShaderLoader(Shader::FragmentShader).Load(invisFragmentShaderPaths);
-
-    std::shared_ptr<ShaderProgram> invisShaderProgramPtr = std::make_shared<ShaderProgram>();
-    invisShaderProgramPtr->Build(vertexShader, invisShader);
-
-    ShaderProgram::Location invisCameraPositionLocation = invisShaderProgramPtr->GetUniformLocation("CameraPosition");
-    ShaderProgram::Location invisWorldMatrixLocation = invisShaderProgramPtr->GetUniformLocation("WorldMatrix");
-    ShaderProgram::Location invisViewProjMatrixLocation = invisShaderProgramPtr->GetUniformLocation("ViewProjMatrix");
-
-    m_renderer.RegisterShaderProgram(invisShaderProgramPtr,
-        [=](const ShaderProgram& shaderProgram, const glm::mat4& worldMatrix, const Camera& camera, bool cameraChanged)
-        {
-            if (cameraChanged)
-            {
-                shaderProgram.SetUniform(invisCameraPositionLocation, camera.ExtractTranslation());
-                shaderProgram.SetUniform(invisViewProjMatrixLocation, camera.GetViewProjectionMatrix());
-            }
-            shaderProgram.SetUniform(invisWorldMatrixLocation, worldMatrix);
-        },
-        m_renderer.GetDefaultUpdateLightsFunction(*invisShaderProgramPtr)
-    );
 
     // Filter out uniforms that are not material properties
     ShaderUniformCollection::NameSet filteredUniforms;
@@ -193,11 +151,12 @@ void SceneViewerApplication::InitializeMaterial()
     filteredUniforms.insert("LightAttenuation");
 
     // Create reference material
-    assert(shaderProgramPtr);
-    m_defaultMaterial = std::make_shared<Material>(shaderProgramPtr, filteredUniforms);
+    //assert(shaderProgramPtr);
+    //m_defaultMaterial = std::make_shared<Material>(shaderProgramPtr, filteredUniforms);
+    m_defaultMaterial = InitMaterial(fragmentShader, vertexShader, filteredUniforms);
 
-    assert(invisShaderProgramPtr);
-    m_invisMaterial = std::make_shared<Material>(invisShaderProgramPtr, filteredUniforms);
+    //assert(invisShaderProgramPtr);
+    m_invisMaterial = InitMaterial(invisShader, vertexShader, filteredUniforms);
 
 }
 
@@ -206,61 +165,20 @@ void SceneViewerApplication::InitializeModels()
     m_skyboxTexture = TextureCubemapLoader::LoadTextureShared("models/skybox/defaultCubemap.png", TextureObject::FormatRGB, TextureObject::InternalFormatSRGB8);
 
     m_skyboxTexture->Bind();
-    float maxLod;
-    m_skyboxTexture->GetParameter(TextureObject::ParameterFloat::MaxLod, maxLod);
+    m_skyboxTexture->GetParameter(TextureObject::ParameterFloat::MaxLod, m_skyboxMaxLod);
     TextureCubemapObject::Unbind();
 
-    m_defaultMaterial->SetUniformValue("AmbientColor", glm::vec3(0.25f));
-
-    m_defaultMaterial->SetUniformValue("EnvironmentTexture", m_skyboxTexture);
-    m_defaultMaterial->SetUniformValue("EnvironmentMaxLod", maxLod);
-    m_defaultMaterial->SetUniformValue("Color", glm::vec3(1.0f));
+    SetUniformsForMat(m_defaultMaterial);
+    SetUniformsForMat(m_invisMaterial);
 
     // Configure loader
-    ModelLoader loader(m_defaultMaterial);
-
-    // Create a new material copy for each submaterial
-    loader.SetCreateMaterials(true);
-
-    // Flip vertically textures loaded by the model loader
-    loader.GetTexture2DLoader().SetFlipVertical(true);
-
-    // Link vertex properties to attributes
-    loader.SetMaterialAttribute(VertexAttribute::Semantic::Position, "VertexPosition");
-    loader.SetMaterialAttribute(VertexAttribute::Semantic::Normal, "VertexNormal");
-    loader.SetMaterialAttribute(VertexAttribute::Semantic::Tangent, "VertexTangent");
-    loader.SetMaterialAttribute(VertexAttribute::Semantic::Bitangent, "VertexBitangent");
-    loader.SetMaterialAttribute(VertexAttribute::Semantic::TexCoord0, "VertexTexCoord");
-
-    // Link material properties to uniforms
-    loader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseColor, "Color");
-    loader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseTexture, "ColorTexture");
-    loader.SetMaterialProperty(ModelLoader::MaterialProperty::NormalTexture, "NormalTexture");
-    loader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
+    ModelLoader loader = MakeLoader(m_defaultMaterial);
 
     // Configure loader
-    ModelLoader invisLoader(m_invisMaterial);
-
-    // Create a new material copy for each submaterial
-    invisLoader.SetCreateMaterials(true);
-
-    // Flip vertically textures loaded by the model loader
-    invisLoader.GetTexture2DLoader().SetFlipVertical(true);
-
-    // Link vertex properties to attributes
-    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Position, "VertexPosition");
-    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Normal, "VertexNormal");
-    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Tangent, "VertexTangent");
-    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::Bitangent, "VertexBitangent");
-    invisLoader.SetMaterialAttribute(VertexAttribute::Semantic::TexCoord0, "VertexTexCoord");
-
-    // Link material properties to uniforms
-    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseColor, "Color");
-    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseTexture, "ColorTexture");
-    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::NormalTexture, "NormalTexture");
-    invisLoader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
+    ModelLoader invisLoader = MakeLoader(m_invisMaterial);
 
     // Load models
+
     std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
     m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure chest", chestModel));
 
@@ -280,6 +198,7 @@ void SceneViewerApplication::InitializeRenderer()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+
     m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
     m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
 }
@@ -296,4 +215,69 @@ void SceneViewerApplication::RenderGUI()
     m_cameraController.DrawGUI(m_imGui);
 
     m_imGui.EndFrame();
+}
+
+std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragmentShader, Shader& vertexShader)
+{
+    auto prog = std::make_shared<ShaderProgram>();
+    prog->Build(vertexShader, fragmentShader);
+
+    // cache uniform locations
+    auto camLoc = prog->GetUniformLocation("CameraPosition");
+    auto worldLoc = prog->GetUniformLocation("WorldMatrix");
+    auto vpLoc = prog->GetUniformLocation("ViewProjMatrix");
+
+    m_renderer.RegisterShaderProgram(
+        prog,
+        [=](auto& shader, const glm::mat4& world, const Camera& cam, bool camChanged)
+        {
+            if (camChanged) {
+                shader.SetUniform(camLoc, cam.ExtractTranslation());
+                shader.SetUniform(vpLoc, cam.GetViewProjectionMatrix());
+            }
+            shader.SetUniform(worldLoc, world);
+        },
+        m_renderer.GetDefaultUpdateLightsFunction(*prog)
+    );
+
+    return prog;
+}
+
+std::shared_ptr<Material> SceneViewerApplication::InitMaterial(Shader& fragmentShader, Shader& vertexShader, ShaderUniformCollection::NameSet& filterUniforms)
+{
+    auto program = MakeProgram(fragmentShader, vertexShader);
+
+    auto mat = std::make_shared<Material>(program, filterUniforms);
+
+    return mat;
+}
+
+void SceneViewerApplication::SetUniformsForMat(std::shared_ptr<Material> mat) {
+    // set the common defaults:
+    mat->SetUniformValue("AmbientColor", glm::vec3(0.25f));
+    mat->SetUniformValue("EnvironmentTexture", m_skyboxTexture);
+    mat->SetUniformValue("EnvironmentMaxLod", m_skyboxMaxLod);
+    mat->SetUniformValue("Color", glm::vec3(1.0f));
+}
+
+ModelLoader SceneViewerApplication::MakeLoader(std::shared_ptr<Material> mat)
+{
+    ModelLoader loader(mat);
+    loader.SetCreateMaterials(true);
+    loader.GetTexture2DLoader().SetFlipVertical(true);
+
+    // attributes
+    loader.SetMaterialAttribute(VertexAttribute::Semantic::Position, "VertexPosition");
+    loader.SetMaterialAttribute(VertexAttribute::Semantic::Normal, "VertexNormal");
+    loader.SetMaterialAttribute(VertexAttribute::Semantic::Tangent, "VertexTangent");
+    loader.SetMaterialAttribute(VertexAttribute::Semantic::Bitangent, "VertexBitangent");
+    loader.SetMaterialAttribute(VertexAttribute::Semantic::TexCoord0, "VertexTexCoord");
+
+    // material → uniform
+    loader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseColor, "Color");
+    loader.SetMaterialProperty(ModelLoader::MaterialProperty::DiffuseTexture, "ColorTexture");
+    loader.SetMaterialProperty(ModelLoader::MaterialProperty::NormalTexture, "NormalTexture");
+    loader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
+
+    return loader;
 }

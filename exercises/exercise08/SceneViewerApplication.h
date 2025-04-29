@@ -6,6 +6,9 @@
 #include <ituGL/renderer/Renderer.h>
 #include <ituGL/camera/CameraController.h>
 #include <ituGL/utils/DearImGui.h>
+#include <ituGL/shader/ShaderUniformCollection.h>
+#include <ituGL/shader/Material.h>
+#include <ituGL/asset/ModelLoader.h>
 
 class TextureCubemapObject;
 class Material;
@@ -30,6 +33,13 @@ private:
 
     void RenderGUI();
 
+    std::shared_ptr<Material> InitMaterial(Shader& fragmentShader, Shader& vertexShader, ShaderUniformCollection::NameSet& filterUniforms);
+    ModelLoader MakeLoader(std::shared_ptr<Material> mat);
+
+    std::shared_ptr<ShaderProgram> MakeProgram(Shader& fragmentShader, Shader& vertexShader);
+
+    void SetUniformsForMat(std::shared_ptr<Material> mat);
+
 private:
     // Helper object for debug GUI
     DearImGui m_imGui;
@@ -51,4 +61,6 @@ private:
 
     // My invis material
     std::shared_ptr<Material> m_invisMaterial;
+
+    float m_skyboxMaxLod;
 };
