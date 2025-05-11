@@ -36,6 +36,8 @@ private:
     std::shared_ptr<Material> InitMaterial(Shader& fragmentShader, Shader& vertexShader, ShaderUniformCollection::NameSet& filterUniforms);
     ModelLoader MakeLoader(std::shared_ptr<Material> mat);
 
+    std::shared_ptr<Texture2DObject> CreateNoiseTexture(unsigned int width, unsigned int height);
+
     std::shared_ptr<ShaderProgram> MakeProgram(Shader& fragmentShader, Shader& vertexShader);
 
     void SetUniformsForMat(std::shared_ptr<Material> mat);
@@ -61,6 +63,8 @@ private:
 
     // My invis material
     std::shared_ptr<Material> m_invisMaterial;
+
+    std::shared_ptr<Texture2DObject> m_noiseMap;
 
     float m_skyboxMaxLod;
 };

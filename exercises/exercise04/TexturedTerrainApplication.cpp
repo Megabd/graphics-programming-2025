@@ -227,6 +227,8 @@ std::shared_ptr<Texture2DObject> TexturedTerrainApplication::CreateHeightMap(uns
     return heightmap;
 }
 
+
+
 void TexturedTerrainApplication::DrawObject(const Mesh& mesh, Material& material, const glm::mat4& worldMatrix)
 {
     material.Use();

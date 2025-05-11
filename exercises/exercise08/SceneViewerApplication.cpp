@@ -26,6 +26,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp> 
 #include <iostream>
+#define STB_PERLIN_IMPLEMENTATION
+#include <stb_perlin.h>
 
 
 
@@ -43,6 +45,8 @@ void SceneViewerApplication::Initialize()
 
     // Initialize DearImGUI
     m_imGui.Initialize(GetMainWindow());
+
+    m_noiseMap = CreateNoiseTexture(256, 256);
 
     InitializeCamera();
     InitializeLights();
@@ -191,12 +195,16 @@ void SceneViewerApplication::InitializeModels()
     //std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
     //m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
 
-    //std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
-    //m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
+    std::shared_ptr<Model> clockModel = invisLoader.LoadShared("models/alarm_clock/alarm_clock.obj");
+    m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 
 
-    std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure chest", chestModel));
+    std::shared_ptr<Model> guy = invisLoader.LoadShared("models/guy/VampKila.obj");
+    auto guyNode = std::make_shared<SceneModel>("guy", guy);
+    guyNode->GetTransform()->SetScale(glm::vec3(0.01f, 0.01f, 0.01f));
+    m_scene.AddSceneNode(guyNode);
+
+
 
     //std::shared_ptr<Model> teaSetModel = loader.LoadShared("models/tea_set/tea_set.obj");
     //m_scene.AddSceneNode(std::make_shared<SceneModel>("tea set", teaSetModel));
@@ -230,6 +238,7 @@ std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragm
 
     // cache uniform locations
     auto camLoc = prog->GetUniformLocation("CameraPosition");
+    auto timeLoc = prog->GetUniformLocation("Time");
     auto worldLoc = prog->GetUniformLocation("WorldMatrix");
     auto vpLoc = prog->GetUniformLocation("ViewProjMatrix");
 
@@ -242,6 +251,8 @@ std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragm
                 shader.SetUniform(vpLoc, cam.GetViewProjectionMatrix());
             }
             shader.SetUniform(worldLoc, world);
+            float currentTime = static_cast<float>(glfwGetTime());
+            shader.SetUniform(timeLoc, currentTime);  // Use cached time location
         },
         m_renderer.GetDefaultUpdateLightsFunction(*prog)
     );
@@ -264,6 +275,9 @@ void SceneViewerApplication::SetUniformsForMat(std::shared_ptr<Material> mat) {
     mat->SetUniformValue("EnvironmentTexture", m_skyboxTexture);
     mat->SetUniformValue("EnvironmentMaxLod", m_skyboxMaxLod);
     mat->SetUniformValue("Color", glm::vec3(1.0f));
+    mat->SetUniformValue("NoiseTexture", m_noiseMap);
+
+
 }
 
 ModelLoader SceneViewerApplication::MakeLoader(std::shared_ptr<Material> mat)
@@ -286,4 +300,40 @@ ModelLoader SceneViewerApplication::MakeLoader(std::shared_ptr<Material> mat)
     loader.SetMaterialProperty(ModelLoader::MaterialProperty::SpecularTexture, "SpecularTexture");
 
     return loader;
+}
+
+std::shared_ptr<Texture2DObject> SceneViewerApplication::CreateNoiseTexture(unsigned int width, unsigned int height)
+{
+    // Create the texture object
+    std::shared_ptr<Texture2DObject> noiseTexture = std::make_shared<Texture2DObject>();
+
+    // Create a vector to hold the pixel data
+    std::vector<float> pixels(height * width);
+
+    // Generate noise values for each pixel
+    for (unsigned int j = 0; j < height; ++j)
+    {
+        for (unsigned int i = 0; i < width; ++i)
+        {
+            // Generate Perlin noise based on pixel coordinates
+            float x = static_cast<float>(i) / (width - 1);
+            float y = static_cast<float>(j) / (height - 1);
+
+            // Use STB's Perlin noise for structured noise
+            float perlinValue = stb_perlin_fbm_noise3(x * 5.0f, y * 5.0f, 0.0f, 2.0f, 0.5f, 6);
+
+            // Normalize to [0, 1]
+            float noiseValue = 0.5f * (perlinValue + 1.0f);
+
+            // Store the noise value
+            pixels[j * width + i] = noiseValue;
+        }
+    }
+
+    // Bind the texture and set its data
+    noiseTexture->Bind();
+    noiseTexture->SetImage<float>(0, width, height, TextureObject::FormatR, TextureObject::InternalFormatR16F, pixels);
+    noiseTexture->GenerateMipmap();
+
+    return noiseTexture;
 }
