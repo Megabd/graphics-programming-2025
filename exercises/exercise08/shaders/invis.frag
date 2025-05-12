@@ -42,8 +42,10 @@ void main()
     // Fresnel outline calculation
     vec3 outlineNormal = normalize(WorldNormal); // Use outline Normal for general geo, ignore small details
     float cosTheta = dot(viewDir, outlineNormal);
-    float fresnel = pow(1.0 - cosTheta, 2.0);       
+    float fresnel = pow(1.0 - cosTheta, 3.0);       
     fresnel = clamp(fresnel * 3, 0.0, 1.0);         
+
+    vec3 outlineColor = vec3(1.0, 0.5, 0.0); 
 
     // Flicker effect for visibility bursts
     float noiseValue = getNoiseValue(TexCoord * 5.0);
@@ -51,13 +53,39 @@ void main()
     flicker = step(0.9, flicker);  
 
     // Make the object normally invisible, but appear during flicker
-    float alpha = mix(0.0, 0.6, fresnel) * (flicker * visibilityFactor);
+    float alpha = mix(1.0, 0.5, fresnel) * (flicker * visibilityFactor);
 
     // Determine final color
-    vec3 outlineColor = vec3(1.0, 0.5, 0.0); 
     vec3 lightingColor = ComputeLighting(position, data, viewDir, true);
+
+    // Calculate the refraction vector
+    vec3 refractVec = refract(-normalize(viewDir), normalize(WorldNormal), 0.95f);
+    refractVec = vec3(refractVec.x, refractVec.y, -refractVec.z);
+
+    vec3 refractedColor = texture(EnvironmentTexture, refractVec).rgb;
+
+    // Mix refraction color with outline and lighting
+    vec3 finalColor = mix(refractedColor, outlineColor, fresnel);
+
     // Blend the outline color with the lighting based on the Fresnel factor
-    vec3 finalColor = mix(lightingColor, outlineColor, fresnel);
 
     FragColor = vec4(finalColor, alpha);
+
+    // Only flicker
+    //FragColor = vec4(lightingColor, alpha);
+
+    // Only refraction
+    //FragColor = vec4(refractedColor, 1.0);
+
+    // only outline
+    //FragColor = vec4(mix(lightingColor, outlineColor, fresnel), 1.0);
+
+    // Refraction + flicker
+    //FragColor = vec4(refractedColor, alpha);
+
+    //Refraction + outline
+    //FragColor = vec4(mix(refractedColor, outlineColor, fresnel), 1.0);
+
+    // Outline + flicker
+    //FragColor = vec4(mix(lightingColor, outlineColor, fresnel), alpha);
 }

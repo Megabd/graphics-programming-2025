@@ -199,6 +199,9 @@ void SceneViewerApplication::InitializeModels()
     m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 
 
+    //std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
+    //m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure_chest", chestModel));
+
     std::shared_ptr<Model> guy = invisLoader.LoadShared("models/guy/VampKila.obj");
     auto guyNode = std::make_shared<SceneModel>("guy", guy);
     guyNode->GetTransform()->SetScale(glm::vec3(0.01f, 0.01f, 0.01f));
@@ -213,7 +216,7 @@ void SceneViewerApplication::InitializeModels()
 
 void SceneViewerApplication::InitializeRenderer()
 {
-    //m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
+    m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
     m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
 }
 
