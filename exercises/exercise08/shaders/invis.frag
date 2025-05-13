@@ -18,8 +18,22 @@ uniform sampler2D NoiseTexture;
 uniform vec3 CameraPosition;
 uniform float Time;
 
+uniform bool outlineOn;
+uniform bool flickerOn;
+uniform bool refractionOn;
+
+uniform float outlineStr;
+
+uniform float maxVisDist;
+uniform float flickerSpeed;
+uniform float flickerSize;
+uniform float flickerChaos;
+uniform float flickerThreshold;
+
+uniform float IOR;
+
 float getNoiseValue(vec2 uv) {
-    return texture(NoiseTexture, uv).r;
+    return texture(NoiseTexture, uv).r; // Get value from the noise texture map using the tex coodinates. .r since the value is in this channel.
 }
 
 void main()
@@ -35,57 +49,40 @@ void main()
     vec3 position = WorldPosition;
     vec3 viewDir = GetDirection(position, CameraPosition);
 
-    // Calculate distance and inverted visibility factor
-    float distance = length(WorldPosition - CameraPosition);
-    float visibilityFactor = 1.0 - smoothstep(1.0, 10.0, distance);  // Scale effects with distance
-
-    // Fresnel outline calculation
-    vec3 outlineNormal = normalize(WorldNormal); // Use outline Normal for general geo, ignore small details
-    float cosTheta = dot(viewDir, outlineNormal);
-    float fresnel = pow(1.0 - cosTheta, 3.0);       
-    fresnel = clamp(fresnel * 3, 0.0, 1.0);         
-
-    vec3 outlineColor = vec3(1.0, 0.5, 0.0); 
-
-    // Flicker effect for visibility bursts
-    float noiseValue = getNoiseValue(TexCoord * 5.0);
-    float flicker = sin(Time * 10.0 + noiseValue * 20.0) * 0.8 + 0.2;
-    flicker = step(0.9, flicker);  
-
-    // Make the object normally invisible, but appear during flicker
-    float alpha = mix(1.0, 0.5, fresnel) * (flicker * visibilityFactor);
-
-    // Determine final color
     vec3 lightingColor = ComputeLighting(position, data, viewDir, true);
 
-    // Calculate the refraction vector
-    vec3 refractVec = refract(-normalize(viewDir), normalize(WorldNormal), 0.95f);
-    refractVec = vec3(refractVec.x, refractVec.y, -refractVec.z);
+    // Calculate distance and inverted visibility factor
+    float distance = length(WorldPosition - CameraPosition);
+    float visibilityFactor = smoothstep(maxVisDist, 0.0, distance);
 
-    vec3 refractedColor = texture(EnvironmentTexture, refractVec).rgb;
+    // Fresnel calculation
+    float cosTheta = dot(viewDir, normalize(WorldNormal)); // Find cosine of the angle between vector from fragment to camera and surface normal. 0 = perpendicular, higher or lower is more perpendicular
+    float fresnel = pow(1.0 - cosTheta, 3.0)*outlineStr; // Times increases the effect. Power off increases falloff, lower numbers become lower than larger numbers.
+    fresnel = clamp(fresnel, 0.0, 1.0);           
 
-    // Mix refraction color with outline and lighting
-    vec3 finalColor = mix(refractedColor, outlineColor, fresnel);
 
-    // Blend the outline color with the lighting based on the Fresnel factor
+    // Flicker effect for visibility bursts
+    float alpha = 1.0;
+    if (flickerOn){
+        float noiseValue = getNoiseValue(TexCoord*flickerSize); 
+        float flicker = clamp(sin(Time * flickerSpeed + noiseValue * flickerChaos), 0.0, 1.0);
+        flicker = step(flickerThreshold, flicker);  
+        alpha = flicker * visibilityFactor;
+    }
 
-    FragColor = vec4(finalColor, alpha);
 
-    // Only flicker
-    //FragColor = vec4(lightingColor, alpha);
+    // Calculate the refraction vector and use instead of lighting color
+    if (refractionOn){
+        vec3 refractVec = refract(-normalize(viewDir), normalize(WorldNormal), IOR);
+        refractVec = vec3(refractVec.x, refractVec.y, -refractVec.z);
+        lightingColor = texture(EnvironmentTexture, refractVec).rgb;
+    }
 
-    // Only refraction
-    //FragColor = vec4(refractedColor, 1.0);
+    // Give outline based on fresnel
+    if (outlineOn){
+        vec3 outlineColor = vec3(1.0, 0.5, 0.0); 
+        lightingColor = mix(lightingColor, outlineColor, fresnel);
+    }
 
-    // only outline
-    //FragColor = vec4(mix(lightingColor, outlineColor, fresnel), 1.0);
-
-    // Refraction + flicker
-    //FragColor = vec4(refractedColor, alpha);
-
-    //Refraction + outline
-    //FragColor = vec4(mix(refractedColor, outlineColor, fresnel), 1.0);
-
-    // Outline + flicker
-    //FragColor = vec4(mix(lightingColor, outlineColor, fresnel), alpha);
+    FragColor = vec4(lightingColor, alpha);
 }

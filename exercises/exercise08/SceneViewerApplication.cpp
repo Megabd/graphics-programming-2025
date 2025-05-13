@@ -20,6 +20,7 @@
 #include <ituGL/renderer/SkyboxRenderPass.h>
 #include <ituGL/renderer/ForwardRenderPass.h>
 #include <ituGL/scene/RendererSceneVisitor.h>
+#include <ituGL/scene/CubeRendererSceneVisitor.h>
 
 #include <ituGL/scene/ImGuiSceneVisitor.h>
 #include <imgui.h>
@@ -66,6 +67,25 @@ void SceneViewerApplication::Update()
     // Add the scene nodes to the renderer
     RendererSceneVisitor rendererSceneVisitor(m_renderer);
     m_scene.AcceptVisitor(rendererSceneVisitor);
+    // Get elapsed time since GLFW was initialized
+    double t = glfwGetTime();
+    // Print it every frame
+    printf("Elapsed time: %.2f s\n", t);
+
+    // Once t surpasses m_bakeDelay, and we haven't baked yet, do it
+    if (!m_hasBakedCubemap && t >= m_bakeDelay) {
+        printf("Baking cubemap now at t=%.2f s\n", t);
+        m_objectCubemap = GenerateSceneCubemap(512, glm::vec3(0.0f));
+        m_hasBakedCubemap = true;
+
+        if (m_skyboxPass) {
+            m_skyboxPass->SetTexture(m_objectCubemap);
+        }
+
+        m_scene.AcceptVisitor(rendererSceneVisitor);
+    }
+
+
 }
 
 void SceneViewerApplication::Render()
@@ -199,8 +219,8 @@ void SceneViewerApplication::InitializeModels()
     m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 
 
-    //std::shared_ptr<Model> chestModel = invisLoader.LoadShared("models/treasure_chest/treasure_chest.obj");
-    //m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure_chest", chestModel));
+    std::shared_ptr<Model> chestModel = loader.LoadShared("models/treasure_chest/treasure_chest.obj");
+    m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure_chest", chestModel));
 
     std::shared_ptr<Model> guy = invisLoader.LoadShared("models/guy/VampKila.obj");
     auto guyNode = std::make_shared<SceneModel>("guy", guy);
@@ -216,7 +236,12 @@ void SceneViewerApplication::InitializeModels()
 
 void SceneViewerApplication::InitializeRenderer()
 {
-    m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
+    // create the skybox pass, keep the raw pointer
+    auto skybox = std::make_unique<SkyboxRenderPass>(m_skyboxTexture);
+    m_skyboxPass = skybox.get();
+    m_renderer.AddRenderPass(std::move(skybox));
+
+    //m_renderer.AddRenderPass(std::make_unique<SkyboxRenderPass>(m_skyboxTexture));
     m_renderer.AddRenderPass(std::make_unique<ForwardRenderPass>());
 }
 
@@ -227,6 +252,26 @@ void SceneViewerApplication::RenderGUI()
     // Draw GUI for scene nodes, using the visitor pattern
     ImGuiSceneVisitor imGuiVisitor(m_imGui, "Scene");
     m_scene.AcceptVisitor(imGuiVisitor);
+
+    if (ImGui::Button(m_outline ? "Outline on" : "Outline off")) {
+        m_outline = !m_outline; 
+    }
+    ImGui::SliderFloat("Outline/fresnel Strength", &m_outlineStr, 0.0f, 10.0f);
+
+    if (ImGui::Button(m_flicker ? "Flicker on" : "Flicker off")) {
+        m_flicker = !m_flicker; 
+    }
+    ImGui::SliderFloat("Maximum visible distance", &m_maxVisDist, 1.0f, 40.0f);
+    ImGui::SliderFloat("Flicker Frequency", &m_flickerSpeed, 1.0f, 50.0f);
+    ImGui::SliderFloat("Flicker Pattern Size", &m_flickerSize, 0.1f, 20.0f);
+    ImGui::SliderFloat("Flicker Irregularity", &m_flickerChaos, 0.0f, 50.0f);
+    ImGui::SliderFloat("Flicker On/Off Threshold", &m_flickerThreshold, 0.0f, 1.0f);
+
+    if (ImGui::Button(m_refract ? "Refraction on" : "Refraction off")) {
+        m_refract = !m_refract;
+    }
+    ImGui::SliderFloat("Ratio of indices of refraction", &m_IOR, 0.0f, 1.0f);
+
 
     // Draw GUI for camera controller
     m_cameraController.DrawGUI(m_imGui);
@@ -242,6 +287,20 @@ std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragm
     // cache uniform locations
     auto camLoc = prog->GetUniformLocation("CameraPosition");
     auto timeLoc = prog->GetUniformLocation("Time");
+    auto outlineLoc = prog->GetUniformLocation("outlineOn");
+    auto flickerLoc = prog->GetUniformLocation("flickerOn");
+    auto refractionLoc = prog->GetUniformLocation("refractionOn");
+
+    auto outlineStrLoc = prog->GetUniformLocation("outlineStr");
+
+    auto maxVisDistLoc = prog->GetUniformLocation("maxVisDist");
+    auto flickerSpeedLoc = prog->GetUniformLocation("flickerSpeed");
+    auto flickerSizeLoc = prog->GetUniformLocation("flickerSize");
+    auto flickerChaosLoc = prog->GetUniformLocation("flickerChaos");
+    auto flickerThresholdLoc = prog->GetUniformLocation("flickerThreshold");
+
+    auto IORLoc = prog->GetUniformLocation("IOR");
+
     auto worldLoc = prog->GetUniformLocation("WorldMatrix");
     auto vpLoc = prog->GetUniformLocation("ViewProjMatrix");
 
@@ -256,6 +315,17 @@ std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragm
             shader.SetUniform(worldLoc, world);
             float currentTime = static_cast<float>(glfwGetTime());
             shader.SetUniform(timeLoc, currentTime);  // Use cached time location
+            // Needs ints
+            shader.SetUniform(outlineLoc, static_cast<int>(m_outline));
+            shader.SetUniform(flickerLoc, static_cast<int>(m_flicker));
+            shader.SetUniform(refractionLoc, static_cast<int>(m_refract));
+            shader.SetUniform(outlineStrLoc, m_outlineStr);
+            shader.SetUniform(maxVisDistLoc, m_maxVisDist);
+            shader.SetUniform(flickerSpeedLoc, m_flickerSpeed);
+            shader.SetUniform(flickerSizeLoc, m_flickerSize);
+            shader.SetUniform(flickerChaosLoc, m_flickerChaos);
+            shader.SetUniform(flickerThresholdLoc, m_flickerThreshold);
+            shader.SetUniform(IORLoc, m_IOR);
         },
         m_renderer.GetDefaultUpdateLightsFunction(*prog)
     );
@@ -340,3 +410,115 @@ std::shared_ptr<Texture2DObject> SceneViewerApplication::CreateNoiseTexture(unsi
 
     return noiseTexture;
 }
+
+std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubemap(
+    unsigned int size,                  // ❶ edge length in texels (e.g. 512 means 512×512 per face)
+    const glm::vec3& center             // ❷ world-space point at which to “point” each cube face
+)
+{
+    // ❸ Create and configure an empty cubemap texture to render into
+    auto cubemap = std::make_shared<TextureCubemapObject>();
+    cubemap->Bind();                        // ❹ make this cubemap the active GL_TEXTURE_CUBE_MAP
+
+    // ❺ Allocate each of the six faces (POSITIVE_X…NEGATIVE_Z)
+    for (GLuint face = 0; face < 6; ++face) {
+        glTexImage2D(
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, // target face
+            0,                                     // mip level 0 (base)
+            GL_RGB16F,                             // internal storage format: 16-bit float RGB
+            size, size,                            // width, height
+            0,                                     // border (must be zero)
+            GL_RGB,                                // format of supplied data
+            GL_FLOAT,                              // data type of supplied texels
+            nullptr                                // data pointer (null = just allocate)
+        );
+    }
+
+    // ❻ Set filtering so that we can sample and generate mipmaps later
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // ❼ Clamp to edge so seams don’t sample outside
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+
+    // ❽ Create a framebuffer (FBO) and a renderbuffer for depth
+    GLuint fbo, rbo;
+    glGenFramebuffers(1, &fbo);             // ❾ allocate one FBO ID
+    glGenRenderbuffers(1, &rbo);            // ❿ allocate one RBO ID
+
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo); // ⓫ bind FBO so attachments refer to it
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);// ⓬ bind RBO to configure its storage
+
+    // ⓭ allocate a depth buffer matching our cubemap face size
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
+    // ⓮ attach RBO as the depth attachment of the FBO
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+
+    // ⓯ Precompute a 90° projection & the six view matrices
+    glm::mat4 captureProj =
+        glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 100.0f);
+    // ⓰ Each lookAt() orients the camera toward one axis
+    std::array<glm::mat4, 6> captureViews = {
+        glm::lookAt(center, center + glm::vec3(1,  0,  0), glm::vec3(0,-1, 0)), // +X
+        glm::lookAt(center, center + glm::vec3(-1,  0,  0), glm::vec3(0,-1, 0)), // –X
+        glm::lookAt(center, center + glm::vec3(0,  1,  0), glm::vec3(0, 0, 1)), // +Y
+        glm::lookAt(center, center + glm::vec3(0, -1,  0), glm::vec3(0, 0,-1)), // –Y
+        glm::lookAt(center, center + glm::vec3(0,  0,  1), glm::vec3(0,-1, 0)), // +Z
+        glm::lookAt(center, center + glm::vec3(0,  0, -1), glm::vec3(0,-1, 0))  // –Z
+    };
+
+
+    // ⓱ Prepare a “capture” camera and add it to the scene for rendering
+    auto captureCam = std::make_shared<Camera>();
+    captureCam->SetPerspectiveProjectionMatrix(1.0f, 1.0f, 0.1f, 100.0f);
+    //SceneCamera captureNode("capture", captureCam);
+    //m_scene.AddSceneNode(std::make_shared<SceneCamera>(captureNode));
+
+
+    // ⓲ Render the scene into each cubemap face
+    for (GLuint i = 0; i < 6; ++i) {
+        // ⓳ attach this face as the FBO’s color target
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+            static_cast<GLuint>(cubemap->GetHandle2()),
+            0
+        );
+        // ⓴ set viewport & clear
+        glViewport(0, 0, size, size);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // 2❶ upload the view+proj to our capture camera
+        captureCam->SetProjectionMatrix(captureProj);
+        captureCam->SetViewMatrix(captureViews[i]);
+
+        m_renderer.SetCurrentCamera(*captureCam);
+        // 2❷ draw all scene nodes (excluding skybox if you only want objects)
+        CubeRendererSceneVisitor visitor(m_renderer, captureCam);
+        m_scene.AcceptVisitor(visitor);
+
+        m_renderer.Render();
+    }
+
+    // 2❸ done rendering: unbind FBO and generate cubemap mipmaps
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    cubemap->Bind();
+    cubemap->GenerateMipmap();
+
+    // **Restore the viewport** to the window's dimensions
+    int w, h;
+    // Assumes you have access to your GLFW window via GetMainWindow()
+    glfwGetFramebufferSize(GetMainWindow().GetInternalWindow(), &w, &h);
+    glViewport(0, 0, w, h);
+
+    // 2❹ clean up: remove the temporary capture camera
+    m_scene.RemoveSceneNode("capture");
+
+    return cubemap;  // 2❺ hand back our populated cubemap
+}
+

@@ -15,4 +15,4 @@ FOREACH(subdir ${subdirectories})
 	LIST(APPEND target_src ${subdir_src})
 ENDFOREACH()
 
-add_library(itugl STATIC ${target_inc} ${target_src})
+add_library(itugl STATIC ${target_inc} ${target_src} "src/ituGL/scene/CubeRendererSceneVisitor.cpp" "include/ituGL/scene/CubeRendererSceneVisitor.h")

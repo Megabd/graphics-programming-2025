@@ -25,6 +25,8 @@ public:
 
     inline Handle GetHandle() const { return m_handle; }
 
+    inline Handle GetHandle2() const { return m_handle; }
+
     // An object is only valid if its handle is not null
     inline bool IsValid() const { return m_handle != NullHandle; }
 

@@ -16,6 +16,8 @@ public:
     // Start the application
     int Run();
 
+    inline const Window& GetMainWindow() const { return m_mainWindow; }
+
 protected:
     // (C++) 1
     // Get the OpenGL device
@@ -25,7 +27,6 @@ protected:
     // (C++) 1
     // Get the main window of the application
     inline Window& GetMainWindow() { return m_mainWindow; }
-    inline const Window& GetMainWindow() const { return m_mainWindow; }
 
     // Get time in seconds from the start of the application
     float GetCurrentTime() const { return m_currentTime; }

@@ -9,6 +9,7 @@
 #include <ituGL/shader/ShaderUniformCollection.h>
 #include <ituGL/shader/Material.h>
 #include <ituGL/asset/ModelLoader.h>
+#include <ituGL/renderer/SkyboxRenderPass.h>
 
 class TextureCubemapObject;
 class Material;
@@ -58,6 +59,8 @@ private:
     // Skybox texture
     std::shared_ptr<TextureCubemapObject> m_skyboxTexture;
 
+    SkyboxRenderPass* m_skyboxPass;
+
     // Default material
     std::shared_ptr<Material> m_defaultMaterial;
 
@@ -66,5 +69,35 @@ private:
 
     std::shared_ptr<Texture2DObject> m_noiseMap;
 
-    float m_skyboxMaxLod;
+    int counter = 0;
+
+    bool m_hasBakedCubemap = false;
+
+    float m_bakeDelay = 30.0f;
+
+    bool m_outline = false;
+
+    bool m_flicker = false;
+
+    bool m_refract = false;
+
+    float m_outlineStr = 3.0f;
+
+    float m_maxVisDist = 5.0f;
+
+    float m_flickerSpeed = 10.0f;
+
+    float m_flickerSize = 5.0f;
+    
+    float m_flickerChaos = 20.0f;
+
+    float m_flickerThreshold = 0.9f;
+
+    float m_IOR = 0.95f;
+
+    std::shared_ptr<TextureCubemapObject> GenerateSceneCubemap(unsigned int size, const glm::vec3& center);
+
+    std::shared_ptr<TextureCubemapObject> m_objectCubemap;
+
+    float m_skyboxMaxLod = false;
 };
