@@ -71,3 +71,4 @@ void SceneModel::AcceptVisitor(SceneVisitor& visitor) const
     visitor.VisitModel(*this);
     //visitor.VisitRenderable(*this);
 }
+

@@ -10,6 +10,7 @@
 #include <ituGL/shader/Material.h>
 #include <ituGL/asset/ModelLoader.h>
 #include <ituGL/renderer/SkyboxRenderPass.h>
+#include <ituGL/scene/SceneModel.h>
 
 class TextureCubemapObject;
 class Material;
@@ -69,11 +70,7 @@ private:
 
     std::shared_ptr<Texture2DObject> m_noiseMap;
 
-    int counter = 0;
-
-    bool m_hasBakedCubemap = false;
-
-    float m_bakeDelay = 30.0f;
+    std::vector<std::shared_ptr<SceneModel>> m_refractiveObjects;
 
     bool m_outline = false;
 

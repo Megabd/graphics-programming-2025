@@ -67,25 +67,6 @@ void SceneViewerApplication::Update()
     // Add the scene nodes to the renderer
     RendererSceneVisitor rendererSceneVisitor(m_renderer);
     m_scene.AcceptVisitor(rendererSceneVisitor);
-    // Get elapsed time since GLFW was initialized
-    double t = glfwGetTime();
-    // Print it every frame
-    printf("Elapsed time: %.2f s\n", t);
-
-    // Once t surpasses m_bakeDelay, and we haven't baked yet, do it
-    if (!m_hasBakedCubemap && t >= m_bakeDelay) {
-        printf("Baking cubemap now at t=%.2f s\n", t);
-        m_objectCubemap = GenerateSceneCubemap(512, glm::vec3(0.0f));
-        m_hasBakedCubemap = true;
-
-        if (m_skyboxPass) {
-            m_skyboxPass->SetTexture(m_objectCubemap);
-        }
-
-        m_scene.AcceptVisitor(rendererSceneVisitor);
-    }
-
-
 }
 
 void SceneViewerApplication::Render()
@@ -215,7 +196,7 @@ void SceneViewerApplication::InitializeModels()
     //std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
     //m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
 
-    std::shared_ptr<Model> clockModel = invisLoader.LoadShared("models/alarm_clock/alarm_clock.obj");
+    std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
     m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 
 
@@ -225,6 +206,7 @@ void SceneViewerApplication::InitializeModels()
     std::shared_ptr<Model> guy = invisLoader.LoadShared("models/guy/VampKila.obj");
     auto guyNode = std::make_shared<SceneModel>("guy", guy);
     guyNode->GetTransform()->SetScale(glm::vec3(0.01f, 0.01f, 0.01f));
+    m_refractiveObjects.push_back(guyNode);
     m_scene.AddSceneNode(guyNode);
 
 
@@ -272,6 +254,26 @@ void SceneViewerApplication::RenderGUI()
     }
     ImGui::SliderFloat("Ratio of indices of refraction", &m_IOR, 0.0f, 1.0f);
 
+
+    if (ImGui::Button("Update Environment Map")) {
+
+        for (auto& node : m_refractiveObjects) {
+            // get the bounds
+            auto aabb = node->GetBoxBounds();
+            glm::vec3 c = aabb.GetSize();
+            // print to console:
+            std::cout << "Model \"" << node->GetName() << "\" center = "
+                << c.x << ", " << c.y << ", " << c.z << "\n";
+            auto pos = node->GetAabbBounds().GetCenter(); 
+            auto map = GenerateSceneCubemap(256, pos);
+            m_objectCubemap = GenerateSceneCubemap(512, pos);
+        
+        }
+        // swap into skybox pass 
+        if (m_skyboxPass) {
+            m_skyboxPass->SetTexture(m_objectCubemap);
+        }
+    }
 
     // Draw GUI for camera controller
     m_cameraController.DrawGUI(m_imGui);
