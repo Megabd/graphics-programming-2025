@@ -74,7 +74,6 @@ void main()
     // Calculate the refraction vector and use instead of lighting color
     if (refractionOn){
         vec3 refractVec = refract(-normalize(viewDir), normalize(WorldNormal), IOR);
-        refractVec = vec3(refractVec.x, refractVec.y, -refractVec.z);
         lightingColor = texture(EnvironmentTexture, refractVec).rgb;
     }
 

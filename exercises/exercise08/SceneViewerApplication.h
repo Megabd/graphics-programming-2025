@@ -40,6 +40,8 @@ private:
 
     std::shared_ptr<Texture2DObject> CreateNoiseTexture(unsigned int width, unsigned int height);
 
+    std::shared_ptr<TextureCubemapObject> GenerateSceneCubemap(unsigned int size, const Camera& cam, SceneModel* skipNode);
+
     std::shared_ptr<ShaderProgram> MakeProgram(Shader& fragmentShader, Shader& vertexShader);
 
     void SetUniformsForMat(std::shared_ptr<Material> mat);
@@ -59,8 +61,6 @@ private:
 
     // Skybox texture
     std::shared_ptr<TextureCubemapObject> m_skyboxTexture;
-
-    SkyboxRenderPass* m_skyboxPass;
 
     // Default material
     std::shared_ptr<Material> m_defaultMaterial;
@@ -91,8 +91,6 @@ private:
     float m_flickerThreshold = 0.9f;
 
     float m_IOR = 0.95f;
-
-    std::shared_ptr<TextureCubemapObject> GenerateSceneCubemap(unsigned int size, const glm::vec3& center, SceneModel* skipNode);
 
     std::shared_ptr<TextureCubemapObject> m_objectCubemap;
 
