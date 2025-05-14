@@ -33,7 +33,7 @@ uniform float flickerThreshold;
 uniform float IOR;
 
 float getNoiseValue(vec2 uv) {
-    return texture(NoiseTexture, uv).r; // Get value from the noise texture map using the tex coodinates. .r since the value is in this channel.
+    return texture(NoiseTexture, uv).r; // Get pixel from the noise texture map using the tex coodinates. .r to get the noise value
 }
 
 void main()
@@ -51,11 +51,11 @@ void main()
 
     vec3 lightingColor = ComputeLighting(position, data, viewDir, true);
 
-    // Calculate distance and inverted visibility factor
+    // Calculate distance and visibility factor (the further away, to closer to 0)
     float distance = length(WorldPosition - CameraPosition);
     float visibilityFactor = smoothstep(maxVisDist, 0.0, distance);
 
-    // Fresnel calculation
+    // Edge calculation
     float cosTheta = dot(viewDir, normalize(WorldNormal)); // Find cosine of the angle between vector from fragment to camera and surface normal. 0 = perpendicular, higher or lower is more perpendicular
     float fresnel = pow(1.0 - cosTheta, 3.0)*outlineStr; // Times increases the effect. Power off increases falloff, lower numbers become lower than larger numbers.
     fresnel = clamp(fresnel, 0.0, 1.0);           
@@ -64,14 +64,14 @@ void main()
     // Flicker effect for visibility bursts
     float alpha = 1.0;
     if (flickerOn){
-        float noiseValue = getNoiseValue(TexCoord*flickerSize); 
-        float flicker = clamp(sin(Time * flickerSpeed + noiseValue * flickerChaos), 0.0, 1.0);
-        flicker = step(flickerThreshold, flicker);  
-        alpha = flicker * visibilityFactor;
+        float noiseValue = getNoiseValue(TexCoord*flickerSize); // Flicker size increases the distance between neighbors on the noise map.
+        float flicker = clamp(sin(Time * flickerSpeed + noiseValue * flickerChaos), 0.0, 1.0); // We move across a sine wave. Flicker speed increases radians per second, noiseValue*flickerchaos definess the phase
+        flicker = step(flickerThreshold, flicker); // We have to be above a flickerThreshold on the sine wave to be counted as on/1, otherwise 0. 
+        alpha = flicker * visibilityFactor; // Decrease the alpha at longer distances
     }
 
 
-    // Calculate the refraction vector and use instead of lighting color
+    // Calculate the refraction vector and sample from enviroment texture
     if (refractionOn){
         vec3 refractVec = refract(-normalize(viewDir), normalize(WorldNormal), IOR);
         lightingColor = texture(EnvironmentTexture, refractVec).rgb;

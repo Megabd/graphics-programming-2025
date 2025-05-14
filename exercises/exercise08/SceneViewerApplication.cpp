@@ -160,19 +160,15 @@ void SceneViewerApplication::InitializeMaterial()
 
 
     // Create reference material
-    //assert(shaderProgramPtr);
-    //m_defaultMaterial = std::make_shared<Material>(shaderProgramPtr, filteredUniforms);
     m_defaultMaterial = InitMaterial(fragmentShader, vertexShader, filteredUniforms);
-
-    //assert(invisShaderProgramPtr);
     m_invisMaterial = InitMaterial(invisShader, vertexShader, filteredUniforms);
+
+    // Enable alpha blending for invis material
     m_invisMaterial->SetBlendEquation(Material::BlendEquation::Add);
     m_invisMaterial->SetBlendParams(
         Material::BlendParam::SourceAlpha,
         Material::BlendParam::OneMinusSourceAlpha
     );
-    m_invisMaterial->SetDepthWrite(false);
-    m_invisMaterial->SetDepthTestFunction(Material::TestFunction::LessEqual);
 }
 
 void SceneViewerApplication::InitializeModels()
@@ -304,6 +300,7 @@ std::shared_ptr<ShaderProgram> SceneViewerApplication::MakeProgram(Shader& fragm
                 shader.SetUniform(vpLoc, cam.GetViewProjectionMatrix());
             }
             shader.SetUniform(worldLoc, world);
+            // Uniforms for invis shader. Inefficent, but others shaders simply ignore
             float currentTime = static_cast<float>(glfwGetTime());
             shader.SetUniform(timeLoc, currentTime);
             shader.SetUniform(outlineLoc, static_cast<int>(m_outline));
@@ -414,6 +411,7 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
 
     // Allocate each of the 6 faces
     for (GLuint face = 0; face < 6; ++face) {
+        // 
         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face,
             0,                                     
             GL_RGB,                             
@@ -425,7 +423,7 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
         );
     }
 
-    // Explain more here
+    // set some parameters 
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
@@ -434,14 +432,12 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 
-    //create a framebuffer and a renderbuffer. Explain more here
+    //create a framebuffer and a renderbuffer and bind
     GLuint fbo, rbo;
     glGenFramebuffers(1, &fbo);         
     glGenRenderbuffers(1, &rbo);            
-
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, size, size);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
@@ -463,7 +459,7 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
 
     // Render into each of the 6 faces of the cubemap
     for (GLuint i = 0; i < 6; ++i) {
-        //Attach the i-th face of our cubemap as the target
+        //Attach the i-th face of our cubemap as the color target
         glFramebufferTexture2D(
             GL_FRAMEBUFFER,
             GL_COLOR_ATTACHMENT0,
@@ -491,9 +487,13 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
         m_renderer.Render();
     };
     
+    // Return to default buffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     cubemap->Bind();
     cubemap->GenerateMipmap();
+
+    // Restore buffer to window size
     int w, h;
     glfwGetFramebufferSize(GetMainWindow().GetInternalWindow(), &w, &h);
     glViewport(0, 0, w, h);
