@@ -92,7 +92,7 @@ private:
 
     float m_IOR = 0.95f;
 
-    std::shared_ptr<TextureCubemapObject> GenerateSceneCubemap(unsigned int size, const glm::vec3& center);
+    std::shared_ptr<TextureCubemapObject> GenerateSceneCubemap(unsigned int size, const glm::vec3& center, SceneModel* skipNode);
 
     std::shared_ptr<TextureCubemapObject> m_objectCubemap;
 

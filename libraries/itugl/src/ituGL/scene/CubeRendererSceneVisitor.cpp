@@ -8,9 +8,11 @@
 
 CubeRendererSceneVisitor::CubeRendererSceneVisitor(
     Renderer& renderer,
-    std::shared_ptr<Camera> captureCam)
+    std::shared_ptr<Camera> captureCam,
+    SceneModel* toSkip)
     : m_renderer(renderer)
     , m_captureCam(std::move(captureCam))
+    , m_skipModel(toSkip)
 {
     m_renderer.SetCurrentCamera(*m_captureCam);
 }
@@ -26,6 +28,8 @@ void CubeRendererSceneVisitor::VisitLight(SceneLight& sceneLight)
 
 void CubeRendererSceneVisitor::VisitModel(SceneModel& sceneModel)
 {
+    if (&sceneModel == m_skipModel)  // skip *this* one
+        return;
     assert(sceneModel.GetTransform());
     m_renderer.AddModel(*sceneModel.GetModel(), sceneModel.GetTransform()->GetTransformMatrix());
 }

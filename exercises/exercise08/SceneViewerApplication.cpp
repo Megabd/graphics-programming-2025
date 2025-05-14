@@ -158,6 +158,7 @@ void SceneViewerApplication::InitializeMaterial()
     filteredUniforms.insert("LightDirection");
     filteredUniforms.insert("LightAttenuation");
 
+
     // Create reference material
     //assert(shaderProgramPtr);
     //m_defaultMaterial = std::make_shared<Material>(shaderProgramPtr, filteredUniforms);
@@ -258,20 +259,18 @@ void SceneViewerApplication::RenderGUI()
     if (ImGui::Button("Update Environment Map")) {
 
         for (auto& node : m_refractiveObjects) {
-            // get the bounds
-            auto aabb = node->GetBoxBounds();
-            glm::vec3 c = aabb.GetSize();
-            // print to console:
-            std::cout << "Model \"" << node->GetName() << "\" center = "
-                << c.x << ", " << c.y << ", " << c.z << "\n";
-            auto pos = node->GetAabbBounds().GetCenter(); 
-            auto map = GenerateSceneCubemap(256, pos);
-            m_objectCubemap = GenerateSceneCubemap(512, pos);
+            // get the current scene camera
+            auto sceneCamNode = m_cameraController.GetCamera();
+            auto& cam = *sceneCamNode->GetCamera();               // ituGL::camera::Camera
+            glm::vec3 camPos = cam.ExtractTranslation();
+            auto map = GenerateSceneCubemap(1024, camPos, node.get());
+            m_objectCubemap = map;
+            node->GetModel()->GetMaterial(0).SetUniformValue("EnvironmentTexture", map);
         
         }
         // swap into skybox pass 
         if (m_skyboxPass) {
-            m_skyboxPass->SetTexture(m_objectCubemap);
+            //m_skyboxPass->SetTexture(m_objectCubemap);
         }
     }
 
@@ -353,6 +352,7 @@ void SceneViewerApplication::SetUniformsForMat(std::shared_ptr<Material> mat) {
     mat->SetUniformValue("NoiseTexture", m_noiseMap);
 
 
+
 }
 
 ModelLoader SceneViewerApplication::MakeLoader(std::shared_ptr<Material> mat)
@@ -415,7 +415,8 @@ std::shared_ptr<Texture2DObject> SceneViewerApplication::CreateNoiseTexture(unsi
 
 std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubemap(
     unsigned int size,                  // ❶ edge length in texels (e.g. 512 means 512×512 per face)
-    const glm::vec3& center             // ❷ world-space point at which to “point” each cube face
+    const glm::vec3& center,             // ❷ world-space point at which to “point” each cube face
+    SceneModel* skipNode
 )
 {
     // ❸ Create and configure an empty cubemap texture to render into
@@ -463,6 +464,7 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
     // ⓯ Precompute a 90° projection & the six view matrices
     glm::mat4 captureProj =
         glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, 100.0f);
+
     // ⓰ Each lookAt() orients the camera toward one axis
     std::array<glm::mat4, 6> captureViews = {
         glm::lookAt(center, center + glm::vec3(1,  0,  0), glm::vec3(0,-1, 0)), // +X
@@ -471,8 +473,16 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
         glm::lookAt(center, center + glm::vec3(0, -1,  0), glm::vec3(0, 0,-1)), // –Y
         glm::lookAt(center, center + glm::vec3(0,  0,  1), glm::vec3(0,-1, 0)), // +Z
         glm::lookAt(center, center + glm::vec3(0,  0, -1), glm::vec3(0,-1, 0))  // –Z
+
     };
 
+    // Since the based envio map is wierd, and thus our shader is wierd
+    glm::mat4 flipX = glm::scale(glm::vec3(1.0f, 1.0f, -1.0f));
+    glm::mat4 flipX2 = glm::scale(glm::vec3(-1.0f, 1.0f, 1.0f));
+    captureViews[0] = flipX2 * captureViews[0];
+    captureViews[1] = flipX2 * captureViews[1];
+    captureViews[4] = flipX * captureViews[4];
+    captureViews[5] = flipX * captureViews[5];
 
     // ⓱ Prepare a “capture” camera and add it to the scene for rendering
     auto captureCam = std::make_shared<Camera>();
@@ -480,7 +490,7 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
     //SceneCamera captureNode("capture", captureCam);
     //m_scene.AddSceneNode(std::make_shared<SceneCamera>(captureNode));
 
-
+    glDisable(GL_CULL_FACE);
     // ⓲ Render the scene into each cubemap face
     for (GLuint i = 0; i < 6; ++i) {
         // ⓳ attach this face as the FBO’s color target
@@ -501,12 +511,12 @@ std::shared_ptr<TextureCubemapObject> SceneViewerApplication::GenerateSceneCubem
 
         m_renderer.SetCurrentCamera(*captureCam);
         // 2❷ draw all scene nodes (excluding skybox if you only want objects)
-        CubeRendererSceneVisitor visitor(m_renderer, captureCam);
+        CubeRendererSceneVisitor visitor(m_renderer, captureCam, skipNode);
         m_scene.AcceptVisitor(visitor);
 
         m_renderer.Render();
     }
-
+    glEnable(GL_CULL_FACE);
     // 2❸ done rendering: unbind FBO and generate cubemap mipmaps
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     cubemap->Bind();
