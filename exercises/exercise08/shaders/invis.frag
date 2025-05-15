@@ -57,7 +57,8 @@ void main()
 
     // Edge calculation
     float cosTheta = dot(viewDir, normalize(WorldNormal)); // Find cosine of the angle between vector from fragment to camera and surface normal. 0 = perpendicular, higher or lower is more perpendicular
-    float fresnel = pow(1.0 - cosTheta, 3.0)*outlineStr; // Times increases the effect. Power off increases falloff, lower numbers become lower than larger numbers.
+    float fresnel = pow(1.0 - cosTheta, 5.0);                   // Times increases the effect. Power off increases falloff, lower numbers become lower than larger numbers.
+    fresnel = fresnel*outlineStr;
     fresnel = clamp(fresnel, 0.0, 1.0);           
 
 
@@ -65,7 +66,7 @@ void main()
     float alpha = 1.0;
     if (flickerOn){
         float noiseValue = getNoiseValue(TexCoord*flickerSize); // Flicker size increases the distance between neighbors on the noise map.
-        float flicker = clamp(sin(Time * flickerSpeed + noiseValue * flickerChaos), 0.0, 1.0); // We move across a sine wave. Flicker speed increases radians per second, noiseValue*flickerchaos definess the phase
+        float flicker = sin(Time * flickerSpeed + noiseValue * flickerChaos); // We move across a sine wave. Flicker speed increases radians per second, flickerchaos increases the amount of difference in the phase/time offset of each pixel. Different timed phasing in gives the wave look
         flicker = step(flickerThreshold, flicker); // We have to be above a flickerThreshold on the sine wave to be counted as on/1, otherwise 0. 
         alpha = flicker * visibilityFactor; // Decrease the alpha at longer distances
     }
@@ -79,7 +80,7 @@ void main()
 
     // Give outline based on fresnel
     if (outlineOn){
-        vec3 outlineColor = vec3(1.0, 0.5, 0.0); 
+        vec3 outlineColor = vec3(1.0, 0.5, 0.0);
         lightingColor = mix(lightingColor, outlineColor, fresnel);
     }
 

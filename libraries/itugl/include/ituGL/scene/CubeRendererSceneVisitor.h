@@ -1,12 +1,12 @@
 ﻿// CubeRendererSceneVisitor.h
 #pragma once
 
-#include <memory>                         // ← for std::shared_ptr
+#include <memory>                         
 #include <ituGL/scene/SceneVisitor.h>
 #include <ituGL/scene/SceneModel.h>
 
 class Renderer;
-class Camera;                             // ← forward‐declare Camera itself
+class Camera;                             
 class SceneCamera;
 class SceneLight;
 class SceneModel;
@@ -14,7 +14,6 @@ class SceneModel;
 class CubeRendererSceneVisitor : public SceneVisitor
 {
 public:
-    // declaration only – no initializer list here!
     CubeRendererSceneVisitor(Renderer& renderer,
         std::shared_ptr<Camera> captureCam,
         SceneModel* toSkip);
@@ -25,6 +24,6 @@ public:
 
 private:
     Renderer& m_renderer;
-    std::shared_ptr<Camera>    m_captureCam;  // store it so we can use it
+    std::shared_ptr<Camera>    m_captureCam; 
     SceneModel* m_skipModel;
 };

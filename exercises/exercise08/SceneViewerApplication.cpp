@@ -54,6 +54,15 @@ void SceneViewerApplication::Initialize()
     InitializeMaterial();
     InitializeModels();
     InitializeRenderer();
+    // For each invisible object, generate envioment map without themselves in it, and send to shader.
+    for (auto& node : m_refractiveObjects) {
+        auto sceneCamNode = m_cameraController.GetCamera();
+        auto& cam = *sceneCamNode->GetCamera();
+        auto map = GenerateSceneCubemap(1024, cam, node.get());
+        m_objectCubemap = map;
+        node->GetModel()->GetMaterial(0).SetUniformValue("EnvironmentTexture", map);
+
+    }
 
 }
 
@@ -193,12 +202,13 @@ void SceneViewerApplication::InitializeModels()
     //std::shared_ptr<Model> cameraModel = loader.LoadShared("models/camera/camera.obj");
     //m_scene.AddSceneNode(std::make_shared<SceneModel>("camera model", cameraModel));
 
-    std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
-
+    //std::shared_ptr<Model> clockModel = loader.LoadShared("models/alarm_clock/alarm_clock.obj");
+    //m_scene.AddSceneNode(std::make_shared<SceneModel>("alarm clock", clockModel));
 
     std::shared_ptr<Model> chestModel = loader.LoadShared("models/treasure_chest/treasure_chest.obj");
-    m_scene.AddSceneNode(std::make_shared<SceneModel>("treasure_chest", chestModel));
+    auto chestNode = std::make_shared<SceneModel>("treasure_chest", chestModel);
+    chestNode->GetTransform()->SetTranslation(glm::vec3(0.0f, 0.8f, -1.1f));
+    m_scene.AddSceneNode(chestNode);
 
     std::shared_ptr<Model> guy = invisLoader.LoadShared("models/guy/VampKila.obj");
     auto guyNode = std::make_shared<SceneModel>("guy", guy);

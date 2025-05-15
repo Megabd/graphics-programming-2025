@@ -28,7 +28,7 @@ void CubeRendererSceneVisitor::VisitLight(SceneLight& sceneLight)
 
 void CubeRendererSceneVisitor::VisitModel(SceneModel& sceneModel)
 {
-    if (&sceneModel == m_skipModel)  // skip *this* one
+    if (&sceneModel == m_skipModel)  // skip this one
         return;
     assert(sceneModel.GetTransform());
     m_renderer.AddModel(*sceneModel.GetModel(), sceneModel.GetTransform()->GetTransformMatrix());
